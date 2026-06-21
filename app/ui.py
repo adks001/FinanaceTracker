@@ -882,7 +882,7 @@ if not st.session_state.auth_user:
                         st.error(f"Failed to resend link: {resend_err}")
             
             # Select login method
-            login_method = st.radio("Select Login Method", ["📧 Email & Password", "💬 WhatsApp (OTP)"], horizontal=True, key="login_method_selector")
+            login_method = st.radio("Select Login Method", ["📧 Email & Password", "📱 Phone OTP (SMS / WhatsApp)"], horizontal=True, key="login_method_selector")
             
             if login_method == "📧 Email & Password":
                 with st.form("login_form"):
@@ -942,6 +942,8 @@ if not st.session_state.auth_user:
                     st.session_state.otp_sent = False
                 if "otp_phone" not in st.session_state:
                     st.session_state.otp_phone = ""
+                if "otp_channel" not in st.session_state:
+                    st.session_state.otp_channel = "whatsapp"
                 
                 if not st.session_state.otp_sent:
                     # Let user enter phone number
@@ -950,6 +952,14 @@ if not st.session_state.auth_user:
                         login_country = st.selectbox("Code", country_codes, index=0, key="login_country_code")
                     with col_phone:
                         login_phone_num = st.text_input("Phone Number", placeholder="9876543210", key="login_phone_num")
+                    
+                    # OTP Delivery Channel Selector
+                    otp_channel_sel = st.radio(
+                        "OTP Delivery Channel",
+                        ["💬 WhatsApp", "✉️ SMS (Text Message)"],
+                        horizontal=True,
+                        key="login_otp_channel_sel"
+                    )
                     
                     btn_send_otp = st.button("📱 Send OTP", use_container_width=True)
                     if btn_send_otp:
@@ -964,24 +974,29 @@ if not st.session_state.auth_user:
                             else:
                                 full_phone = login_phone_num.strip()
                             
+                            channel = "whatsapp" if "WhatsApp" in otp_channel_sel else "sms"
+                            
                             try:
                                 supabase.auth.sign_in_with_otp({
                                     "phone": full_phone,
                                     "options": {
-                                        "channel": "whatsapp"
+                                        "channel": channel
                                     }
                                 })
                                 st.session_state.otp_sent = True
                                 st.session_state.otp_phone = full_phone
-                                st.success(f"OTP sent successfully to {full_phone} via WhatsApp!")
+                                st.session_state.otp_channel = channel
+                                display_channel = "WhatsApp" if channel == "whatsapp" else "SMS"
+                                st.success(f"OTP sent successfully to {full_phone} via {display_channel}!")
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Error sending OTP: {e}")
+                                display_channel = "WhatsApp" if channel == "whatsapp" else "SMS"
+                                st.error(f"Error sending OTP via {display_channel}: {e}")
                                 st.markdown(f"""
                                 <div style="background-color: rgba(255, 185, 0, 0.05); border: 1px solid rgba(255, 185, 0, 0.2); border-radius: 12px; padding: 1rem; margin-top: 0.5rem; font-family: 'Outfit', sans-serif;">
-                                    <span style="font-weight: 700; font-size: 1rem; color: #FFB900;">🛠️ How to Test WhatsApp OTP (Free Sandbox Mocks)</span><br/>
+                                    <span style="font-weight: 700; font-size: 1rem; color: #FFB900;">🛠️ How to Test OTP (Free Sandbox Mocks)</span><br/>
                                     <span style="font-size: 0.85rem; color: #cbd5e0; line-height: 1.4; display: block; margin-top: 0.4rem;">
-                                        By default, Supabase requires a configured WhatsApp/SMS provider (e.g. Twilio) to deliver WhatsApp OTPs. 
+                                        By default, Supabase requires a configured WhatsApp/SMS provider (e.g. Twilio) to deliver OTPs. 
                                         To test this flow for free in development, you can add <b>Test Phone Numbers</b> in your Supabase Auth Console:
                                         <ol style="margin-top: 0.4rem; padding-left: 1.2rem; color: #cbd5e0;">
                                             <li>Go to your <a href="https://supabase.com/dashboard/project/hizsdqadjxrvmbvtcobl/auth/providers" target="_blank" style="color: #60EFFF; font-weight: bold; text-decoration: none;">Supabase Auth Providers Console</a></li>
@@ -995,7 +1010,8 @@ if not st.session_state.auth_user:
                                 </div>
                                 """, unsafe_allow_html=True)
                 else:
-                    st.info(f"OTP has been sent to **{st.session_state.otp_phone}**")
+                    display_channel = "WhatsApp" if st.session_state.otp_channel == "whatsapp" else "SMS"
+                    st.info(f"OTP has been sent to **{st.session_state.otp_phone}** via **{display_channel}**")
                     otp_code = st.text_input("Enter 6-digit OTP Code", placeholder="123456")
                     
                     col_btn1, col_btn2 = st.columns(2)
