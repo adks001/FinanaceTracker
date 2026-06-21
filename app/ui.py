@@ -598,6 +598,32 @@ if "login_error_unverified" not in st.session_state:
 if "login_unverified_email" not in st.session_state:
     st.session_state.login_unverified_email = ""
 
+# Hide Streamlit administrative controls for non-admin users
+is_admin = False
+if st.session_state.get("auth_user") and st.session_state.auth_user.email == "adks009@gmail.com":
+    is_admin = True
+
+if not is_admin:
+    st.markdown("""
+    <style>
+    /* Hide top header bar (Share, Star, Edit, GitHub links) */
+    [data-testid="stHeader"], header {
+        display: none !important;
+        height: 0px !important;
+    }
+    /* Hide default Main Menu (Three Dots) */
+    #MainMenu, [data-testid="stMainMenu"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    /* Hide Manage App button at bottom right and default footer */
+    [data-testid="stManageAppBttn"], div.stManageAppBttn, footer {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # Email Sync Manager Dialog
 @st.dialog("📥 Email Transaction Sync Manager")
 def manage_email_sync_dialog():
@@ -1086,6 +1112,67 @@ with st.sidebar:
         </h3>
     </div>
     """, unsafe_allow_html=True)
+        
+    # Mobile Utility / PWA Quick Access Card
+    if not st.session_state.get("pwa_dismissed"):
+        st.markdown("""
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 0.8rem; margin-bottom: 0.8rem;">
+            <span style="font-weight: 700; font-size: 0.9rem; color: #60EFFF;">📱 App Quick Access</span><br/>
+            <span style="font-size: 0.8rem; color: #cbd5e0; line-height: 1.3; display: block; margin-top: 0.3rem; margin-bottom: 0.6rem;">
+                Add to Home Screen for app-like access (Tap browser menu <span style="font-weight:bold;">⁝</span> or share <span style="font-weight:bold;">📤</span> and select <b>Add to Home Screen</b>).
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.components.v1.html("""
+        <style>
+        .share-btn {
+            background: linear-gradient(135deg, #007CF0 0%, #00DFD8 100%);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            box-shadow: 0 4px 12px rgba(0, 223, 216, 0.15);
+            transition: transform 0.2s;
+            font-family: 'Outfit', sans-serif;
+        }
+        .share-btn:hover {
+            transform: scale(1.02);
+        }
+        </style>
+        <button class="share-btn" onclick="shareApp()">🔗 Share App Link</button>
+        <script>
+        function shareApp() {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'AI Financial Coach',
+                    text: 'Check out this AI-powered Financial Coach and Expense Tracker!',
+                    url: 'https://aifinancetracker.streamlit.app/'
+                }).catch(err => console.log(err));
+            } else {
+                const tempInput = document.createElement('input');
+                tempInput.value = 'https://aifinancetracker.streamlit.app/';
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                alert('Link copied to clipboard! (Sharing sheet not supported on this browser)');
+            }
+        }
+        </script>
+        """, height=38)
+        
+        if st.button("✕ Dismiss Guide", key="btn_dismiss_pwa", use_container_width=True):
+            st.session_state.pwa_dismissed = True
+            st.rerun()
+        st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True) # Spacer
         
     # Edit Profile expander
     with st.expander("👤 Edit Profile"):
@@ -2893,4 +2980,25 @@ with tab_coach:
                             break
             if not has_rec:
                 st.caption("No recurring expenses templates.")
+
+# Render Global Footer at the very bottom of the page
+st.markdown("""
+<hr style="margin-top: 3rem; opacity: 0.1;"/>
+<div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; padding: 1.5rem 0; font-family: 'Outfit', sans-serif; font-size: 0.85rem; color: #a0aec0; gap: 1rem;">
+    <div style="display: flex; flex-direction: row; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
+        <span style="font-weight: 700; color: #fff;">📞 Contact Us</span>
+        <a href="https://wa.me/917506009321" target="_blank" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; background: #25D366; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.8rem; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.2);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.977h.004c4.368 0 7.927-3.558 7.93-7.93a7.897 7.897 0 0 0-2.33-5.615zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.69-4.98c-.202-.101-1.194-.588-1.378-.653-.185-.066-.32-.099-.455.101-.134.2-.522.653-.64.787-.118.134-.236.15-.437.05-.202-.101-.849-.313-1.616-.997-.597-.533-1.001-1.192-1.119-1.392-.118-.2-.013-.308.088-.408.09-.09.202-.236.302-.354.101-.118.134-.2.202-.336.067-.134.034-.251-.017-.352-.05-.101-.455-1.094-.623-1.5-.165-.4-.347-.343-.455-.349-.117-.007-.251-.007-.385-.007a.784.784 0 0 0-.568.264c-.185.2-.707.691-.707 1.684 0 .993.722 1.952.822 2.085.101.134 1.417 2.164 3.435 3.033.48.207.854.33 1.147.424.483.153.923.131 1.272.079.39-.058 1.194-.488 1.362-.96.168-.472.168-.876.118-.96-.05-.085-.185-.134-.387-.235z"/>
+            </svg>
+            Chat on WhatsApp
+        </a>
+        <span>•</span>
+        <span>Email: <a href="mailto:adks001@gmail.com" style="color: #60EFFF; text-decoration: none;">adks001@gmail.com</a></span>
+    </div>
+    <div style="font-size: 0.8rem; text-align: right;">
+        © 2026 Ankur Kumar Singh. All Rights Reserved.
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
