@@ -7,6 +7,7 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+REDIRECT_URL = os.getenv("REDIRECT_URL", "http://localhost:8501/")
 
 # Optional defaults
 DEFAULT_IMAP_EMAIL = os.getenv("DEFAULT_IMAP_EMAIL")

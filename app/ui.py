@@ -589,6 +589,14 @@ if "editing_expense_id" not in st.session_state:
     st.session_state.editing_expense_id = None
 if "coach_messages" not in st.session_state:
     st.session_state.coach_messages = []
+if "auth_view" not in st.session_state:
+    st.session_state.auth_view = "login"
+if "show_verification_prompt" not in st.session_state:
+    st.session_state.show_verification_prompt = None
+if "login_error_unverified" not in st.session_state:
+    st.session_state.login_error_unverified = False
+if "login_unverified_email" not in st.session_state:
+    st.session_state.login_unverified_email = ""
 
 # Email Sync Manager Dialog
 @st.dialog("📥 Email Transaction Sync Manager")
@@ -789,51 +797,218 @@ if not st.session_state.auth_user:
     st.markdown('<div class="main-title">Global Expense & Split Tracker</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">A Multi-User SaaS Engine powered by Supabase & Gemini</div>', unsafe_allow_html=True)
     
+    # Get configured deep link redirect URL
+    REDIRECT_URL = getattr(config, "REDIRECT_URL", "http://localhost:8501/")
+    
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        tab_login, tab_register = st.tabs(["🔑 Access Account", "📝 Register New"])
+        # Custom visual toggle for tabs
+        col_toggle_1, col_toggle_2 = st.columns(2)
+        with col_toggle_1:
+            is_login = st.session_state.auth_view == "login"
+            if st.button("🔑 Access Account", use_container_width=True, type="primary" if is_login else "secondary"):
+                st.session_state.auth_view = "login"
+                st.session_state.login_error_unverified = False # Clear error on switch
+                st.session_state.show_verification_prompt = None
+                st.rerun()
+        with col_toggle_2:
+            is_register = st.session_state.auth_view == "register"
+            if st.button("📝 Register New", use_container_width=True, type="primary" if is_register else "secondary"):
+                st.session_state.auth_view = "register"
+                st.session_state.login_error_unverified = False # Clear error on switch
+                st.session_state.show_verification_prompt = None
+                st.rerun()
+
+        # Shared country codes configuration
+        import re
+        country_codes = [
+            "🇮🇳 India (+91)",
+            "🇺🇸 USA (+1)",
+            "🇬🇧 UK (+44)",
+            "🇨🇦 Canada (+1)",
+            "🇦🇺 Australia (+61)",
+            "🇸🇬 Singapore (+65)",
+            "🇦🇪 UAE (+971)",
+            "Other"
+        ]
         
-        # LOGIN TAB
-        with tab_login:
-            with st.form("login_form"):
-                email = st.text_input("Email Address")
-                password = st.text_input("Password", type="password")
-                btn_login = st.form_submit_button("Sign In")
+        # LOGIN VIEW
+        if st.session_state.auth_view == "login":
+            # Display Verification Prompts outside the form (so button click works)
+            if st.session_state.show_verification_prompt:
+                st.info(f"✉️ **Verification email sent to {st.session_state.show_verification_prompt}!** Please check your inbox and verify your email before signing in.")
                 
-                if btn_login:
+            if st.session_state.login_error_unverified:
+                st.error(f"⚠️ **Access Blocked:** Your email address `{st.session_state.login_unverified_email}` has not been verified yet. Please check your inbox.")
+                if st.button("📧 Resend Verification Email", key="resend_verify_login_outside", use_container_width=True):
                     try:
-                        auth_res = supabase.auth.sign_in_with_password({"email": email, "password": password})
-                        if auth_res.user:
-                            st.session_state.auth_user = auth_res.user
-                            create_profile_if_not_exists(auth_res.user.id, auth_res.user.email)
-                            st.session_state.show_login_success = True
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Login failed: {e}")
+                        supabase.auth.resend({
+                            "type": "signup",
+                            "email": st.session_state.login_unverified_email,
+                            "options": {
+                                "email_redirect_to": REDIRECT_URL
+                            }
+                        })
+                        st.success("Verification link resent successfully! Please check your inbox.")
+                        st.session_state.login_error_unverified = False
+                        st.session_state.show_verification_prompt = None
+                    except Exception as resend_err:
+                        st.error(f"Failed to resend link: {resend_err}")
             
-            # Forgot Password section
-            with st.expander("🔑 Forgot Password?"):
-                reset_email = st.text_input("Enter your registered email address")
-                if st.button("Send Reset Link", key="btn_reset_pass_gate"):
-                    if not reset_email:
-                        st.warning("Please enter your email address.")
-                    else:
-                        try:
-                            supabase.auth.reset_password_for_email(reset_email)
-                            st.success("A password reset link has been sent to your email address!")
-                        except Exception as e:
-                            st.error(f"Failed to send reset link: {e}")
+            # Select login method
+            login_method = st.radio("Select Login Method", ["📧 Email & Password", "📱 Phone Number (OTP)"], horizontal=True, key="login_method_selector")
+            
+            if login_method == "📧 Email & Password":
+                with st.form("login_form"):
+                    email = st.text_input("Email Address", placeholder="jane@example.com")
+                    password = st.text_input("Password", type="password")
+                    btn_login = st.form_submit_button("Sign In")
+                    
+                    if btn_login:
+                        if not email.strip() or not password.strip():
+                            st.error("Please enter email and password.")
+                        else:
+                            try:
+                                # Sign in user
+                                auth_res = supabase.auth.sign_in_with_password({"email": email.strip(), "password": password})
+                                if auth_res.user:
+                                    # Strict Check: check if email is verified
+                                    email_confirmed = getattr(auth_res.user, "email_confirmed_at", None)
+                                    if not email_confirmed:
+                                        # Block access
+                                        supabase.auth.sign_out()
+                                        st.session_state.auth_user = None
+                                        st.session_state.login_error_unverified = True
+                                        st.session_state.login_unverified_email = email.strip()
+                                        st.session_state.show_verification_prompt = None
+                                        st.rerun()
+                                    else:
+                                        st.session_state.auth_user = auth_res.user
+                                        create_profile_if_not_exists(auth_res.user.id, auth_res.user.email)
+                                        st.session_state.show_login_success = True
+                                        st.rerun()
+                            except Exception as e:
+                                err_str = str(e).lower()
+                                if "email not confirmed" in err_str or "confirm your email" in err_str:
+                                    st.session_state.login_error_unverified = True
+                                    st.session_state.login_unverified_email = email.strip()
+                                    st.session_state.show_verification_prompt = None
+                                    st.rerun()
+                                else:
+                                    st.error(f"Login failed: {e}")
+                
+                # Forgot Password section
+                with st.expander("🔑 Forgot Password?"):
+                    reset_email = st.text_input("Enter your registered email address")
+                    if st.button("Send Reset Link", key="btn_reset_pass_gate"):
+                        if not reset_email:
+                            st.warning("Please enter your email address.")
+                        else:
+                            try:
+                                supabase.auth.reset_password_for_email(reset_email)
+                                st.success("A password reset link has been sent to your email address!")
+                            except Exception as e:
+                                st.error(f"Failed to send reset link: {e}")
+            
+            else:
+                # Phone OTP Logic
+                if "otp_sent" not in st.session_state:
+                    st.session_state.otp_sent = False
+                if "otp_phone" not in st.session_state:
+                    st.session_state.otp_phone = ""
+                
+                if not st.session_state.otp_sent:
+                    # Let user enter phone number
+                    col_code, col_phone = st.columns([1.2, 2.8])
+                    with col_code:
+                        login_country = st.selectbox("Code", country_codes, index=0, key="login_country_code")
+                    with col_phone:
+                        login_phone_num = st.text_input("Phone Number", placeholder="7506009321", key="login_phone_num")
+                    
+                    btn_send_otp = st.button("📱 Send OTP", use_container_width=True)
+                    if btn_send_otp:
+                        if not login_phone_num.strip():
+                            st.warning("Please enter your phone number.")
+                        else:
+                            # Format phone number
+                            if login_country != "Other":
+                                code_match = re.search(r'\(\+(\d+)\)', login_country)
+                                code = f"+{code_match.group(1)}" if code_match else ""
+                                full_phone = f"{code}{login_phone_num.strip()}"
+                            else:
+                                full_phone = login_phone_num.strip()
+                            
+                            try:
+                                supabase.auth.sign_in_with_otp({"phone": full_phone})
+                                st.session_state.otp_sent = True
+                                st.session_state.otp_phone = full_phone
+                                st.success(f"OTP sent successfully to {full_phone}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error sending OTP: {e}")
+                                st.info("ℹ️ Phone authentication requires an active SMS provider in your Supabase dashboard. If not configured, you can register and login via Email.")
+                else:
+                    st.info(f"OTP has been sent to **{st.session_state.otp_phone}**")
+                    otp_code = st.text_input("Enter 6-digit OTP Code", placeholder="123456")
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        btn_verify = st.button("🔓 Verify & Sign In", type="primary", use_container_width=True)
+                    with col_btn2:
+                        btn_resend = st.button("🔄 Resend OTP / Change Phone", use_container_width=True)
                         
-        # REGISTER TAB
-        with tab_register:
+                    if btn_verify:
+                        if not otp_code.strip():
+                            st.warning("Please enter the OTP code.")
+                        else:
+                            try:
+                                verify_res = supabase.auth.verify_otp({
+                                    "phone": st.session_state.otp_phone,
+                                    "token": otp_code.strip(),
+                                    "type": "sms"
+                                })
+                                if verify_res.user:
+                                    st.session_state.auth_user = verify_res.user
+                                    create_profile_if_not_exists(verify_res.user.id, verify_res.user.email or "", phone_no=st.session_state.otp_phone)
+                                    st.session_state.otp_sent = False
+                                    st.session_state.otp_phone = ""
+                                    st.session_state.show_login_success = True
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to verify OTP.")
+                            except Exception as e:
+                                st.error(f"Verification failed: {e}")
+                                
+                    if btn_resend:
+                        st.session_state.otp_sent = False
+                        st.session_state.otp_phone = ""
+                        st.rerun()
+                        
+        # REGISTER VIEW
+        else:
             with st.form("register_form"):
                 reg_name = st.text_input("Full Name", placeholder="Jane Doe")
                 reg_email = st.text_input("Email Address", placeholder="jane@example.com")
-                reg_phone = st.text_input("Phone Number (with country code)", placeholder="+11234567890")
+                
+                st.markdown("<small><b>Phone Number</b></small>", unsafe_allow_html=True)
+                col_reg_code, col_reg_phone = st.columns([1.2, 2.8])
+                with col_reg_code:
+                    reg_country = st.selectbox("Code", country_codes, index=0, key="reg_country_code", label_visibility="collapsed")
+                with col_reg_phone:
+                    reg_phone_only = st.text_input("Phone Number", placeholder="7506009321", key="reg_phone_num", label_visibility="collapsed")
+                
                 reg_password = st.text_input("Password (min 6 characters)", type="password")
                 btn_register = st.form_submit_button("Create Account")
                 
                 if btn_register:
+                    # Combine phone number
+                    if reg_country != "Other":
+                        code_match = re.search(r'\(\+(\d+)\)', reg_country)
+                        code = f"+{code_match.group(1)}" if code_match else ""
+                        reg_phone = f"{code}{reg_phone_only.strip()}" if reg_phone_only.strip() else ""
+                    else:
+                        reg_phone = reg_phone_only.strip()
+                        
                     if len(reg_password) < 6:
                         st.error("Password must be at least 6 characters.")
                     elif not reg_name or not reg_email:
@@ -842,36 +1017,54 @@ if not st.session_state.auth_user:
                         try:
                             # Sign up user inside Supabase Auth
                             auth_res = supabase.auth.sign_up({
-                                "email": reg_email,
+                                "email": reg_email.strip(),
                                 "password": reg_password,
                                 "options": {
                                     "data": {
-                                        "full_name": reg_name,
+                                        "full_name": reg_name.strip(),
                                         "phone_no": reg_phone
-                                    }
+                                    },
+                                    "email_redirect_to": REDIRECT_URL
                                 }
                             })
                             if auth_res.user:
                                 # Ensure profile is created immediately (fallback logic)
                                 create_profile_if_not_exists(
                                     auth_res.user.id, 
-                                    reg_email, 
-                                    full_name=reg_name, 
+                                    reg_email.strip(), 
+                                    full_name=reg_name.strip(), 
                                     phone_no=reg_phone
                                 )
-                                st.success("Registration complete! Confirm email if configured, or Sign In below.")
-                                st.info("Verification email sent (if email authentication flows are enabled in Supabase dashboard). Or try signing in directly.")
+                                # Redirect to login page and display message
+                                st.session_state.auth_view = "login"
+                                st.session_state.show_verification_prompt = reg_email.strip()
+                                st.rerun()
                         except Exception as e:
                             st.error(f"Registration failed: {e}")
     st.stop()
 
 # 3. Main SaaS Application Area (User Authenticated)
 current_user = st.session_state.auth_user
+if current_user:
+    try:
+        user_res = supabase.auth.get_user()
+        if user_res and user_res.user:
+            current_user = user_res.user
+            st.session_state.auth_user = user_res.user
+    except Exception:
+        pass
+
 profile = get_profile(current_user.id)
 user_fullname = profile.get("full_name", current_user.email.split("@")[0])
 
 # Clean up email and phone number fallbacks to avoid cross-field bugs
 profile_email = profile.get("email") or current_user.email or ""
+if current_user.email and profile_email != current_user.email:
+    try:
+        supabase.table("profiles").update({"email": current_user.email}).eq("id", current_user.id).execute()
+        profile_email = current_user.email
+    except Exception:
+        pass
 raw_phone = profile.get("phone_no") or ""
 phone_val = "" if raw_phone.strip().lower() == profile_email.strip().lower() else raw_phone
 
@@ -896,10 +1089,63 @@ with st.sidebar:
         
     # Edit Profile expander
     with st.expander("👤 Edit Profile"):
-        st.caption("Change name, phone, password, or upload photo. Email editing is disabled.")
+        st.caption("Change name, email, phone, password, or upload photo.")
         
-        # Display registered email cleanly and safely in greyed-out textbox
-        st.text_input("Registered Email", value=profile_email, disabled=True)
+        # Check if email is verified
+        is_email_verified = False
+        if current_user:
+            email_confirmed_at = getattr(current_user, "email_confirmed_at", None)
+            if email_confirmed_at:
+                is_email_verified = True
+        
+        # Render email field dynamically based on verification status
+        REDIRECT_URL = getattr(config, "REDIRECT_URL", "http://localhost:8501/")
+        
+        if is_email_verified:
+            # State B: Email VERIFIED
+            # Lock the email input field (disabled=True) and display ✅ next to it
+            col_email, col_badge = st.columns([4, 1])
+            with col_email:
+                st.text_input("Registered Email", value=profile_email, disabled=True, key="profile_email_readonly")
+            with col_badge:
+                st.markdown("<div style='text-align: center; margin-top: 1.8rem; font-size: 1.5rem;' title='Verified Email'>✅</div>", unsafe_allow_html=True)
+            updated_email = profile_email
+        else:
+            # State A: Email NOT Verified
+            # Do not gray out (disabled=False), editable, and render a "Verify Email" button next to it
+            col_email, col_action = st.columns([3.2, 1.8])
+            with col_email:
+                updated_email = st.text_input("Registered Email (Unverified)", value=profile_email, key="profile_email_editable")
+            with col_action:
+                st.markdown("<div style='height: 1.8rem;'></div>", unsafe_allow_html=True) # Spacer
+                btn_verify_email = st.button("✉️ Verify Email", key="btn_verify_email_profile", help="Trigger verification email", use_container_width=True)
+                
+            if btn_verify_email:
+                if not updated_email.strip():
+                    st.error("Email cannot be empty.")
+                else:
+                    try:
+                        # If email changed, update it first in Supabase
+                        if updated_email.strip() != current_user.email:
+                            supabase.auth.update_user(
+                                {"email": updated_email.strip()},
+                                options={"email_redirect_to": REDIRECT_URL}
+                            )
+                            supabase.table("profiles").update({"email": updated_email.strip()}).eq("id", current_user.id).execute()
+                            st.success("Email updated and verification link sent! Please check your inbox.")
+                        else:
+                            # Just resend verification
+                            supabase.auth.resend({
+                                "type": "signup",
+                                "email": updated_email.strip(),
+                                "options": {
+                                    "email_redirect_to": REDIRECT_URL
+                                }
+                            })
+                            st.success("Verification link sent! Please check your inbox.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Verification trigger failed: {e}")
         
         # Profile Photo File Uploader (converts to base64 data URI)
         st.markdown("<small><b>Upload Profile Photo</b></small>", unsafe_allow_html=True)
@@ -929,6 +1175,18 @@ with st.sidebar:
                 st.error("Name cannot be empty.")
             else:
                 try:
+                    # Update email if unverified and changed
+                    if not is_email_verified and updated_email.strip() and updated_email.strip() != profile_email:
+                        try:
+                            supabase.auth.update_user(
+                                {"email": updated_email.strip()},
+                                options={"email_redirect_to": REDIRECT_URL}
+                            )
+                            supabase.table("profiles").update({"email": updated_email.strip()}).eq("id", current_user.id).execute()
+                            st.info("Verification link sent to the new email address. Please check your inbox.")
+                        except Exception as email_update_err:
+                            st.error(f"Failed to update email: {email_update_err}")
+                    
                     update_data = {
                         "full_name": new_name.strip(),
                         "phone_no": new_phone.strip() if new_phone.strip() else None
@@ -949,7 +1207,7 @@ with st.sidebar:
                         else:
                             # Re-authenticate user to check if current password is correct
                             try:
-                                supabase.auth.sign_in_with_password({"email": profile_email, "password": curr_password.strip()})
+                                supabase.auth.sign_in_with_password({"email": updated_email.strip(), "password": curr_password.strip()})
                                 supabase.auth.update_user({"password": new_password.strip()})
                                 st.info("Password updated successfully!")
                             except Exception as auth_err:
