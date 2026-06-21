@@ -949,7 +949,7 @@ if not st.session_state.auth_user:
                     with col_code:
                         login_country = st.selectbox("Code", country_codes, index=0, key="login_country_code")
                     with col_phone:
-                        login_phone_num = st.text_input("Phone Number", placeholder="7506009321", key="login_phone_num")
+                        login_phone_num = st.text_input("Phone Number", placeholder="9876543210", key="login_phone_num")
                     
                     btn_send_otp = st.button("📱 Send OTP", use_container_width=True)
                     if btn_send_otp:
@@ -1037,7 +1037,7 @@ if not st.session_state.auth_user:
                 with col_reg_code:
                     reg_country = st.selectbox("Code", country_codes, index=0, key="reg_country_code", label_visibility="collapsed")
                 with col_reg_phone:
-                    reg_phone_only = st.text_input("Phone Number", placeholder="7506009321", key="reg_phone_num", label_visibility="collapsed")
+                    reg_phone_only = st.text_input("Phone Number", placeholder="9876543210", key="reg_phone_num", label_visibility="collapsed")
                 
                 reg_password = st.text_input("Password (min 6 characters)", type="password")
                 btn_register = st.form_submit_button("Create Account")
