@@ -882,7 +882,7 @@ if not st.session_state.auth_user:
                         st.error(f"Failed to resend link: {resend_err}")
             
             # Select login method
-            login_method = st.radio("Select Login Method", ["📧 Email & Password", "📱 Phone Number (OTP)"], horizontal=True, key="login_method_selector")
+            login_method = st.radio("Select Login Method", ["📧 Email & Password", "💬 WhatsApp (OTP)"], horizontal=True, key="login_method_selector")
             
             if login_method == "📧 Email & Password":
                 with st.form("login_form"):
@@ -965,18 +965,23 @@ if not st.session_state.auth_user:
                                 full_phone = login_phone_num.strip()
                             
                             try:
-                                supabase.auth.sign_in_with_otp({"phone": full_phone})
+                                supabase.auth.sign_in_with_otp({
+                                    "phone": full_phone,
+                                    "options": {
+                                        "channel": "whatsapp"
+                                    }
+                                })
                                 st.session_state.otp_sent = True
                                 st.session_state.otp_phone = full_phone
-                                st.success(f"OTP sent successfully to {full_phone}!")
+                                st.success(f"OTP sent successfully to {full_phone} via WhatsApp!")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error sending OTP: {e}")
                                 st.markdown(f"""
                                 <div style="background-color: rgba(255, 185, 0, 0.05); border: 1px solid rgba(255, 185, 0, 0.2); border-radius: 12px; padding: 1rem; margin-top: 0.5rem; font-family: 'Outfit', sans-serif;">
-                                    <span style="font-weight: 700; font-size: 1rem; color: #FFB900;">🛠️ How to Test Phone OTP (Free Sandbox Mocks)</span><br/>
+                                    <span style="font-weight: 700; font-size: 1rem; color: #FFB900;">🛠️ How to Test WhatsApp OTP (Free Sandbox Mocks)</span><br/>
                                     <span style="font-size: 0.85rem; color: #cbd5e0; line-height: 1.4; display: block; margin-top: 0.4rem;">
-                                        By default, Supabase requires a paid SMS provider (e.g. Twilio) to deliver OTP texts. 
+                                        By default, Supabase requires a configured WhatsApp/SMS provider (e.g. Twilio) to deliver WhatsApp OTPs. 
                                         To test this flow for free in development, you can add <b>Test Phone Numbers</b> in your Supabase Auth Console:
                                         <ol style="margin-top: 0.4rem; padding-left: 1.2rem; color: #cbd5e0;">
                                             <li>Go to your <a href="https://supabase.com/dashboard/project/hizsdqadjxrvmbvtcobl/auth/providers" target="_blank" style="color: #60EFFF; font-weight: bold; text-decoration: none;">Supabase Auth Providers Console</a></li>
