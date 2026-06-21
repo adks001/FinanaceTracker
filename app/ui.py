@@ -972,7 +972,23 @@ if not st.session_state.auth_user:
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error sending OTP: {e}")
-                                st.info("ℹ️ Phone authentication requires an active SMS provider in your Supabase dashboard. If not configured, you can register and login via Email.")
+                                st.markdown(f"""
+                                <div style="background-color: rgba(255, 185, 0, 0.05); border: 1px solid rgba(255, 185, 0, 0.2); border-radius: 12px; padding: 1rem; margin-top: 0.5rem; font-family: 'Outfit', sans-serif;">
+                                    <span style="font-weight: 700; font-size: 1rem; color: #FFB900;">🛠️ How to Test Phone OTP (Free Sandbox Mocks)</span><br/>
+                                    <span style="font-size: 0.85rem; color: #cbd5e0; line-height: 1.4; display: block; margin-top: 0.4rem;">
+                                        By default, Supabase requires a paid SMS provider (e.g. Twilio) to deliver OTP texts. 
+                                        To test this flow for free in development, you can add <b>Test Phone Numbers</b> in your Supabase Auth Console:
+                                        <ol style="margin-top: 0.4rem; padding-left: 1.2rem; color: #cbd5e0;">
+                                            <li>Go to your <a href="https://supabase.com/dashboard/project/hizsdqadjxrvmbvtcobl/auth/providers" target="_blank" style="color: #60EFFF; font-weight: bold; text-decoration: none;">Supabase Auth Providers Console</a></li>
+                                            <li>Expand the <b>Phone</b> section</li>
+                                            <li>Enable the Phone provider toggle and scroll to <b>Test Phone Numbers</b></li>
+                                            <li>Add your number (e.g. <code>{full_phone}</code>) and a mock OTP code (e.g. <code>123456</code>)</li>
+                                            <li>Click <b>Save</b></li>
+                                        </ol>
+                                        Once added, try sending OTP again from the login page, enter <code>123456</code>, and you will log in natively with full database RLS compatibility!
+                                    </span>
+                                </div>
+                                """, unsafe_allow_html=True)
                 else:
                     st.info(f"OTP has been sent to **{st.session_state.otp_phone}**")
                     otp_code = st.text_input("Enter 6-digit OTP Code", placeholder="123456")
