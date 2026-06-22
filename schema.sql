@@ -286,11 +286,31 @@ $$ LANGUAGE sql SECURITY DEFINER SET search_path = '';
 
 -- 19. Row-Level Security (RLS) Policies
 
--- Households Policy (Members can select)
+-- Households Policy
 DROP POLICY IF EXISTS "Allow members to read households" ON public.households;
 CREATE POLICY "Allow members to read households" ON public.households
     FOR SELECT USING (
         public.check_user_in_household(id)
+    );
+
+DROP POLICY IF EXISTS "Allow authenticated users to insert households" ON public.households;
+CREATE POLICY "Allow authenticated users to insert households" ON public.households
+    FOR INSERT WITH CHECK (
+        auth.uid() IS NOT NULL
+    );
+
+DROP POLICY IF EXISTS "Allow admins and parents to update households" ON public.households;
+CREATE POLICY "Allow admins and parents to update households" ON public.households
+    FOR UPDATE USING (
+        public.check_user_is_admin_or_parent(id)
+    ) WITH CHECK (
+        public.check_user_is_admin_or_parent(id)
+    );
+
+DROP POLICY IF EXISTS "Allow admins and parents to delete households" ON public.households;
+CREATE POLICY "Allow admins and parents to delete households" ON public.households
+    FOR DELETE USING (
+        public.check_user_is_admin_or_parent(id)
     );
 
 -- Household Members Policy
@@ -305,6 +325,23 @@ DROP POLICY IF EXISTS "Allow members to insert household_members" ON public.hous
 CREATE POLICY "Allow members to insert household_members" ON public.household_members
     FOR INSERT WITH CHECK (
         auth.uid() = profile_id OR 
+        public.check_user_is_admin_or_parent(household_id)
+    );
+
+DROP POLICY IF EXISTS "Allow members to update household_members" ON public.household_members;
+CREATE POLICY "Allow members to update household_members" ON public.household_members
+    FOR UPDATE USING (
+        profile_id = auth.uid() OR 
+        public.check_user_is_admin_or_parent(household_id)
+    ) WITH CHECK (
+        profile_id = auth.uid() OR 
+        public.check_user_is_admin_or_parent(household_id)
+    );
+
+DROP POLICY IF EXISTS "Allow members to delete household_members" ON public.household_members;
+CREATE POLICY "Allow members to delete household_members" ON public.household_members
+    FOR DELETE USING (
+        profile_id = auth.uid() OR 
         public.check_user_is_admin_or_parent(household_id)
     );
 
