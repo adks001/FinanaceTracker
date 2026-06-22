@@ -886,8 +886,10 @@ if not st.session_state.auth_user:
             "Other"
         ]
         
-        # Pre-generate PKCE verifier and build Google OAuth URL
+        # Pre-generate PKCE verifier and build OAuth URLs (Google, Facebook, Apple)
         google_auth_url = None
+        facebook_auth_url = None
+        apple_auth_url = None
         try:
             import secrets
             # We want to avoid regenerating the verifier on every tiny rerun to keep the URL stable
@@ -898,17 +900,45 @@ if not st.session_state.auth_user:
             # Manually inject the verifier into the Supabase SyncMemoryStorage
             supabase.auth._storage.set_item("supabase.auth.token-code-verifier", st.session_state.oauth_verifier)
             
-            # Generate the auth URL
+            # Generate the auth URLs
             REDIRECT_URL = getattr(config, "REDIRECT_URL", "http://localhost:8501/")
             redirect_to = f"{REDIRECT_URL}?verifier={st.session_state.oauth_verifier}"
             
-            oauth_res = supabase.auth.sign_in_with_oauth({
-                "provider": "google",
-                "options": {
-                    "redirect_to": redirect_to
-                }
-            })
-            google_auth_url = oauth_res.url
+            # Google
+            try:
+                oauth_res_g = supabase.auth.sign_in_with_oauth({
+                    "provider": "google",
+                    "options": {
+                        "redirect_to": redirect_to
+                    }
+                })
+                google_auth_url = oauth_res_g.url
+            except Exception:
+                pass
+                
+            # Facebook
+            try:
+                oauth_res_fb = supabase.auth.sign_in_with_oauth({
+                    "provider": "facebook",
+                    "options": {
+                        "redirect_to": redirect_to
+                    }
+                })
+                facebook_auth_url = oauth_res_fb.url
+            except Exception:
+                pass
+                
+            # Apple
+            try:
+                oauth_res_ap = supabase.auth.sign_in_with_oauth({
+                    "provider": "apple",
+                    "options": {
+                        "redirect_to": redirect_to
+                    }
+                })
+                apple_auth_url = oauth_res_ap.url
+            except Exception:
+                pass
         except Exception as oauth_prep_err:
             pass
 
@@ -1101,40 +1131,101 @@ if not st.session_state.auth_user:
                         st.session_state.otp_phone = ""
                         st.rerun()
             
-            # Google Sign-In Button (rendered for all login methods)
-            if google_auth_url:
+            # Social Sign-In Buttons (rendered for all login methods)
+            if google_auth_url or facebook_auth_url or apple_auth_url:
                 st.markdown("<div style='text-align: center; margin: 1.25rem 0 0.75rem 0; color: #718096; font-size: 0.85rem; font-family: \"Outfit\", sans-serif;'>— OR —</div>", unsafe_allow_html=True)
-                st.markdown(f"""
-                <a href="{google_auth_url}" target="_self" style="
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background-color: #ffffff;
-                    color: #1f2937;
-                    font-weight: 600;
-                    font-family: 'Outfit', sans-serif;
-                    font-size: 0.95rem;
-                    border-radius: 8px;
-                    padding: 0.6rem 1.5rem;
-                    text-decoration: none;
-                    transition: all 0.2s ease;
-                    border: 1px solid #e5e7eb;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                    margin: 0.5rem 0;
-                    width: 100%;
-                    box-sizing: border-box;
-                " onmouseover="this.style.backgroundColor='#f9fafb'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#ffffff'; this.style.transform='translateY(0)';">
-                    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="18px" height="18px" viewBox="0 0 48 48" style="margin-right: 12px; display: block;">
-                        <g>
-                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                            <path fill="#4285F4" d="M46.5 24c0-1.61-.15-3.16-.42-4.69H24v9.09h12.64c-.55 2.89-2.2 5.33-4.7 7l7.29 5.65C43.48 37.21 46.5 31.14 46.5 24z"></path>
-                            <path fill="#FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.98-6.19z"></path>
-                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.29-5.65c-2.02 1.35-4.61 2.16-8.6 2.16-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                        </g>
-                    </svg>
-                    Continue with Google
-                </a>
-                """, unsafe_allow_html=True)
+                
+                # Google Button
+                if google_auth_url:
+                    st.markdown(f"""
+                    <a href="{google_auth_url}" target="_self" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background-color: #ffffff;
+                        color: #1f2937;
+                        font-weight: 600;
+                        font-family: 'Outfit', sans-serif;
+                        font-size: 0.95rem;
+                        border-radius: 8px;
+                        padding: 0.6rem 1.5rem;
+                        text-decoration: none;
+                        transition: all 0.2s ease;
+                        border: 1px solid #e5e7eb;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                        margin: 0.5rem 0;
+                        width: 100%;
+                        box-sizing: border-box;
+                    " onmouseover="this.style.backgroundColor='#f9fafb'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#ffffff'; this.style.transform='translateY(0)';">
+                        <svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="18px" height="18px" viewBox="0 0 48 48" style="margin-right: 12px; display: block;">
+                            <g>
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                                <path fill="#4285F4" d="M46.5 24c0-1.61-.15-3.16-.42-4.69H24v9.09h12.64c-.55 2.89-2.2 5.33-4.7 7l7.29 5.65C43.48 37.21 46.5 31.14 46.5 24z"></path>
+                                <path fill="#FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.98-6.19z"></path>
+                                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.29-5.65c-2.02 1.35-4.61 2.16-8.6 2.16-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                            </g>
+                        </svg>
+                        Continue with Google
+                    </a>
+                    """, unsafe_allow_html=True)
+                
+                # Facebook Button
+                if facebook_auth_url:
+                    st.markdown(f"""
+                    <a href="{facebook_auth_url}" target="_self" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background-color: #ffffff;
+                        color: #1c1e21;
+                        font-weight: 600;
+                        font-family: 'Outfit', sans-serif;
+                        font-size: 0.95rem;
+                        border-radius: 8px;
+                        padding: 0.6rem 1.5rem;
+                        text-decoration: none;
+                        transition: all 0.2s ease;
+                        border: 1px solid #e5e7eb;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                        margin: 0.5rem 0;
+                        width: 100%;
+                        box-sizing: border-box;
+                    " onmouseover="this.style.backgroundColor='#f9fafb'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#ffffff'; this.style.transform='translateY(0)';">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18px" height="18px" viewBox="0 0 24 24" style="margin-right: 12px; display: block; fill: #1877F2;">
+                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                        </svg>
+                        Continue with Facebook
+                    </a>
+                    """, unsafe_allow_html=True)
+                
+                # Apple Button
+                if apple_auth_url:
+                    st.markdown(f"""
+                    <a href="{apple_auth_url}" target="_self" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background-color: #ffffff;
+                        color: #000000;
+                        font-weight: 600;
+                        font-family: 'Outfit', sans-serif;
+                        font-size: 0.95rem;
+                        border-radius: 8px;
+                        padding: 0.6rem 1.5rem;
+                        text-decoration: none;
+                        transition: all 0.2s ease;
+                        border: 1px solid #e5e7eb;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                        margin: 0.5rem 0;
+                        width: 100%;
+                        box-sizing: border-box;
+                    " onmouseover="this.style.backgroundColor='#f9fafb'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#ffffff'; this.style.transform='translateY(0)';">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18px" height="18px" viewBox="0 0 24 24" style="margin-right: 12px; display: block; fill: #000000;">
+                            <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.54 9.1 1.51 12.07 1.004 1.45 2.19 3.078 3.766 3.023 1.524-.055 2.1-1.008 3.94-1.008 1.83 0 2.365 1.008 3.94.978 1.614-.027 2.654-1.477 3.64-2.917 1.134-1.67 1.6-3.284 1.625-3.366-.034-.016-3.13-1.2-3.16-4.785-.027-2.99 2.455-4.427 2.47-4.44-1.402-2.05-3.56-2.285-4.32-2.33-2.016-.164-3.5 1.04-4.45 1.04zM15.42 3.645c.807-.98 1.35-2.348 1.2-3.645-1.12.048-2.485.748-3.285 1.685-.718.825-1.35 2.193-1.17 3.475 1.25.097 2.518-.61 3.255-1.515z"/>
+                        </svg>
+                        Continue with Apple
+                    </a>
+                    """, unsafe_allow_html=True)
                         
         # REGISTER VIEW
         else:
