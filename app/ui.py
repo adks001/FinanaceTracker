@@ -804,6 +804,34 @@ if not verify_connection():
         st.rerun()
     st.stop()
 
+# Handle OAuth callback query parameters
+if not st.session_state.auth_user:
+    oauth_code = st.query_params.get("code")
+    oauth_verifier = st.query_params.get("verifier")
+    oauth_error = st.query_params.get("error_description")
+    
+    if oauth_error:
+        st.error(f"Authentication Error: {oauth_error}")
+        st.query_params.clear()
+    elif oauth_code and oauth_verifier:
+        try:
+            REDIRECT_URL = getattr(config, "REDIRECT_URL", "http://localhost:8501/")
+            redirect_to = f"{REDIRECT_URL}?verifier={oauth_verifier}"
+            res = supabase.auth.exchange_code_for_session({
+                "auth_code": oauth_code,
+                "code_verifier": oauth_verifier,
+                "redirect_to": redirect_to
+            })
+            if res.user:
+                st.session_state.auth_user = res.user
+                create_profile_if_not_exists(res.user.id, res.user.email)
+                st.query_params.clear() # Clear parameters from URL
+                st.session_state.show_login_success = True
+                st.rerun()
+        except Exception as e:
+            st.error(f"Google Authentication failed: {e}")
+            st.query_params.clear()
+
 # If supabase client session has expired and been cleared, sync local auth state
 if st.session_state.auth_user:
     try:
@@ -858,6 +886,32 @@ if not st.session_state.auth_user:
             "Other"
         ]
         
+        # Pre-generate PKCE verifier and build Google OAuth URL
+        google_auth_url = None
+        try:
+            import secrets
+            # We want to avoid regenerating the verifier on every tiny rerun to keep the URL stable
+            # while the user is looking at the screen, so we can save it in session_state!
+            if "oauth_verifier" not in st.session_state:
+                st.session_state.oauth_verifier = secrets.token_urlsafe(64)
+            
+            # Manually inject the verifier into the Supabase SyncMemoryStorage
+            supabase.auth._storage.set_item("supabase.auth.token-code-verifier", st.session_state.oauth_verifier)
+            
+            # Generate the auth URL
+            REDIRECT_URL = getattr(config, "REDIRECT_URL", "http://localhost:8501/")
+            redirect_to = f"{REDIRECT_URL}?verifier={st.session_state.oauth_verifier}"
+            
+            oauth_res = supabase.auth.sign_in_with_oauth({
+                "provider": "google",
+                "options": {
+                    "redirect_to": redirect_to
+                }
+            })
+            google_auth_url = oauth_res.url
+        except Exception as oauth_prep_err:
+            pass
+
         # LOGIN VIEW
         if st.session_state.auth_view == "login":
             # Display Verification Prompts outside the form (so button click works)
@@ -1046,6 +1100,41 @@ if not st.session_state.auth_user:
                         st.session_state.otp_sent = False
                         st.session_state.otp_phone = ""
                         st.rerun()
+            
+            # Google Sign-In Button (rendered for all login methods)
+            if google_auth_url:
+                st.markdown("<div style='text-align: center; margin: 1.25rem 0 0.75rem 0; color: #718096; font-size: 0.85rem; font-family: \"Outfit\", sans-serif;'>— OR —</div>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <a href="{google_auth_url}" target="_self" style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background-color: #ffffff;
+                    color: #1f2937;
+                    font-weight: 600;
+                    font-family: 'Outfit', sans-serif;
+                    font-size: 0.95rem;
+                    border-radius: 8px;
+                    padding: 0.6rem 1.5rem;
+                    text-decoration: none;
+                    transition: all 0.2s ease;
+                    border: 1px solid #e5e7eb;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    margin: 0.5rem 0;
+                    width: 100%;
+                    box-sizing: border-box;
+                " onmouseover="this.style.backgroundColor='#f9fafb'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#ffffff'; this.style.transform='translateY(0)';">
+                    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="18px" height="18px" viewBox="0 0 48 48" style="margin-right: 12px; display: block;">
+                        <g>
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                            <path fill="#4285F4" d="M46.5 24c0-1.61-.15-3.16-.42-4.69H24v9.09h12.64c-.55 2.89-2.2 5.33-4.7 7l7.29 5.65C43.48 37.21 46.5 31.14 46.5 24z"></path>
+                            <path fill="#FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.98-6.19z"></path>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.29-5.65c-2.02 1.35-4.61 2.16-8.6 2.16-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                        </g>
+                    </svg>
+                    Continue with Google
+                </a>
+                """, unsafe_allow_html=True)
                         
         # REGISTER VIEW
         else:
