@@ -294,10 +294,9 @@ CREATE POLICY "Allow members to read households" ON public.households
     );
 
 DROP POLICY IF EXISTS "Allow authenticated users to insert households" ON public.households;
-CREATE POLICY "Allow authenticated users to insert households" ON public.households
-    FOR INSERT WITH CHECK (
-        auth.uid() IS NOT NULL
-    );
+DROP POLICY IF EXISTS "Allow anyone to insert households" ON public.households;
+CREATE POLICY "Allow anyone to insert households" ON public.households
+    FOR INSERT WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow admins and parents to update households" ON public.households;
 CREATE POLICY "Allow admins and parents to update households" ON public.households
