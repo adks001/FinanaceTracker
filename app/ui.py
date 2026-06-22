@@ -8,11 +8,19 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+from PIL import Image
+
+# Load custom app icon if available
+icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_icon.png")
+try:
+    app_icon = Image.open(icon_path)
+except Exception:
+    app_icon = "💰"
 
 # Set page config for mobile and web responsiveness
 st.set_page_config(
     page_title="Global Omni-Channel Expense Tracker",
-    page_icon="💰",
+    page_icon=app_icon,
     layout="wide",
     initial_sidebar_state="expanded"
 )
